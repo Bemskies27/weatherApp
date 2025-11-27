@@ -1,0 +1,1519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Weather Forecast | SkyCast Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-dark: #2563eb;
+            --secondary: #10b981;
+            --dark: #1e293b;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc;
+        }
+        
+        .weather-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .temperature-chart {
+            height: 300px;
+        }
+        
+        .nav-tab {
+            transition: all 0.3s ease;
+        }
+        
+        .nav-tab.active {
+            background-color: rgba(255, 255, 255, 0.2);
+            border-bottom: 3px solid white;
+        }
+        
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- Header Section -->
+    <div class="gradient-bg text-white shadow-xl">
+        <div class="container mx-auto px-4 py-6">
+            <div class="flex justify-between items-center mb-6">
+                <div class="flex items-center space-x-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <h1 class="text-2xl font-bold">SkyCast Pro</h1>
+                </div>
+                <a href="{{ url_for('index') }}" class="flex items-center text-white hover:text-gray-200 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clip-rule="evenodd" />
+                    </svg>
+                    Back to Dashboard
+                </a>
+            </div>
+            
+            {% if city %}
+            <div class="fade-in">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-end">
+                    <div>
+                        <h2 class="text-3xl font-bold">{{ city.name }}, {{ city.country }}</h2>
+                        <p class="text-blue-100">5-Day Weather Forecast & Analysis</p>
+                    </div>
+                    <div class="mt-4 md:mt-0 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <span id="real-time-clock">Updated: {{ now.strftime('%H:%M:%S') }}</span>
+                    </div>
+                </div>
+                
+                <!-- Navigation Tabs -->
+                <div class="flex mt-8 border-b border-white/20">
+                    <button onclick="showTab('forecast')" class="nav-tab active px-4 py-2 font-medium text-white">
+                        Forecast
+                    </button>
+                    <button onclick="showTab('analysis')" class="nav-tab px-4 py-2 font-medium text-white/80 hover:text-white">
+                        Data Analysis
+                    </button>
+                    <button onclick="showTab('export')" class="nav-tab px-4 py-2 font-medium text-white/80 hover:text-white">
+                        Export Data
+                    </button>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Rest of your HTML content remains the same -->
+
+    {% if city and forecast %}
+    <script>
+        // Real-time clock function
+        function updateRealTimeClock() {
+            const now = new Date();
+            const hours = now.getHours().toString().padStart(2, '0');
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const seconds = now.getSeconds().toString().padStart(2, '0');
+            document.getElementById('real-time-clock').textContent = `Updated: ${hours}:${minutes}:${seconds}`;
+        }
+
+        // Update the clock immediately and then every second
+        updateRealTimeClock();
+        setInterval(updateRealTimeClock, 1000);
+
+        // Tab Navigation
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
+            
+            // Update active tab styling
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+                tab.classList.add('text-white/80');
+            });
+            
+            event.currentTarget.classList.add('active');
+            event.currentTarget.classList.remove('text-white/80');
+        }
+        
+        // Rest of your JavaScript remains the same
+    </script>
+    {% endif %}
+
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8 -mt-6">
+        {% if error %}
+        <div class="bg-red-50 border-l-4 border-red-500 text-red-700 p-4 mb-8 rounded fade-in" role="alert">
+            <p class="font-bold">Error</p>
+            <p>{{ error }}</p>
+        </div>
+        {% endif %}
+
+        {% if city and forecast %}
+        <!-- Forecast Tab Content -->
+        <div id="forecast-tab" class="tab-content">
+            <!-- Today's Weather Highlight -->
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 fade-in">
+                <div class="flex flex-col md:flex-row items-center">
+                    <div class="flex-1 flex flex-col md:flex-row items-center">
+                        <div class="mr-6 mb-4 md:mb-0">
+                            {% if forecast[0].description and "clear" in forecast[0].description.lower() %}
+                                <img src="https://openweathermap.org/img/wn/01d@4x.png" alt="Clear sky" class="w-32 h-32">
+                            {% elif forecast[0].description and "cloud" in forecast[0].description.lower() %}
+                                <img src="https://openweathermap.org/img/wn/03d@4x.png" alt="Cloudy" class="w-32 h-32">
+                            {% elif forecast[0].description and ("rain" in forecast[0].description.lower() or "drizzle" in forecast[0].description.lower()) %}
+                                <img src="https://openweathermap.org/img/wn/09d@4x.png" alt="Rain" class="w-32 h-32">
+                            {% else %}
+                                <img src="https://openweathermap.org/img/wn/50d@4x.png" alt="Atmosphere" class="w-32 h-32">
+                            {% endif %}
+                        </div>
+                        <div class="text-center md:text-left">
+                            <div class="text-5xl font-bold text-gray-800 mb-2">{{ forecast[0].temperature }}°C</div>
+                            <div class="text-xl text-gray-600 capitalize mb-1">{{ forecast[0].description }}</div>
+                            <div class="text-gray-500">Feels like {{ forecast[0].feels_like }}°C</div>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4 w-full md:w-auto">
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <div class="text-gray-500">Humidity</div>
+                            <div class="text-2xl font-semibold">{{ forecast[0].humidity }}%</div>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <div class="text-gray-500">Wind</div>
+                            <div class="text-2xl font-semibold">{{ forecast[0].wind }} m/s</div>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <div class="text-gray-500">Pressure</div>
+                            <div class="text-2xl font-semibold">{{ forecast[0].pressure }} hPa</div>
+                        </div>
+                        <div class="bg-gray-50 p-4 rounded-lg">
+                            <div class="text-gray-500">Visibility</div>
+                            <div class="text-2xl font-semibold">
+                                {% if forecast[0].visibility %}
+                                    {{ (forecast[0].visibility/1000)|round(1) }} km
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 5-Day Forecast -->
+            <div class="fade-in">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-semibold text-gray-800">5-Day Forecast</h3>
+                    <div class="text-sm text-gray-500">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Forecast generated: {{ now.strftime('%b %d, %Y %H:%M') }}
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+                    {% for entry in forecast %}
+                    <div class="weather-card bg-white rounded-xl shadow-md p-6 border border-gray-100 hover:shadow-lg transition-all duration-300 fade-in" style="animation-delay: {{ loop.index * 0.1 }}s">
+                        <!-- Date and Time -->
+                        <div class="text-center mb-3">
+                            <div class="text-lg font-bold text-gray-800">
+                                {% if entry.timestamp %}
+                                    {{ entry.timestamp.strftime('%a') }}<br>
+                                    <span class="text-sm font-normal">{{ entry.timestamp.strftime('%b %d') }}</span>
+                                {% else %}
+                                    Day {{ loop.index }}
+                                {% endif %}
+                            </div>
+                            <div class="text-xs text-gray-500 mt-1">
+                                {% if entry.timestamp %}
+                                    {{ entry.timestamp.strftime('%I:%M %p') }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <!-- Weather Icon -->
+                        <div class="my-4">
+                            {% if entry.description and "clear" in entry.description.lower() %}
+                                <img src="https://openweathermap.org/img/wn/01d@2x.png" alt="Clear sky" class="w-20 h-20 mx-auto">
+                            {% elif entry.description and "cloud" in entry.description.lower() %}
+                                <img src="https://openweathermap.org/img/wn/03d@2x.png" alt="Cloudy" class="w-20 h-20 mx-auto">
+                            {% elif entry.description and ("rain" in entry.description.lower() or "drizzle" in entry.description.lower()) %}
+                                <img src="https://openweathermap.org/img/wn/09d@2x.png" alt="Rain" class="w-20 h-20 mx-auto">
+                            {% elif entry.description and "thunderstorm" in entry.description.lower() %}
+                                <img src="https://openweathermap.org/img/wn/11d@2x.png" alt="Thunderstorm" class="w-20 h-20 mx-auto">
+                            {% elif entry.description and "snow" in entry.description.lower() %}
+                                <img src="https://openweathermap.org/img/wn/13d@2x.png" alt="Snow" class="w-20 h-20 mx-auto">
+                            {% else %}
+                                <img src="https://openweathermap.org/img/wn/50d@2x.png" alt="Atmosphere" class="w-20 h-20 mx-auto">
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Temperature -->
+                        <div class="text-center">
+                            <div class="text-3xl font-bold text-gray-800 mb-1">{{ entry.temperature }}°C</div>
+                            <div class="text-gray-600 capitalize mb-3 text-sm">{{ entry.description }}</div>
+                        </div>
+                        
+                        <!-- Weather Details -->
+                        <div class="w-full border-t border-gray-100 pt-3 mt-3 space-y-2">
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Feels Like</span>
+                                <span class="font-medium text-gray-700">{{ entry.feels_like }}°C</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Humidity</span>
+                                <span class="font-medium text-gray-700">{{ entry.humidity }}%</span>
+                            </div>
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Wind</span>
+                                <span class="font-medium text-gray-700">{{ entry.wind }} m/s</span>
+                            </div>
+                            {% if entry.precipitation %}
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Precip Chance</span>
+                                <span class="font-medium text-gray-700">{{ (entry.precipitation * 100)|round }}%</span>
+                            </div>
+                            {% endif %}
+                            {% if entry.pressure %}
+                            <div class="flex justify-between text-sm">
+                                <span class="text-gray-500">Pressure</span>
+                                <span class="font-medium text-gray-700">{{ entry.pressure }} hPa</span>
+                            </div>
+                            {% endif %}
+                        </div>
+                        
+                        <!-- Prediction Timestamp -->
+                        {% if entry.prediction_timestamp %}
+                        <div class="mt-3 pt-3 border-t border-gray-100 text-xs text-gray-400">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Predicted: {{ entry.prediction_timestamp.strftime('%H:%M') }}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Weather Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 fade-in">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Temperature Trend</h3>
+                    <div class="temperature-chart">
+                        <canvas id="tempChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6 border border-gray-200 fade-in">
+                    <div class="flex justify-between items-center mb-4">
+                        <h3 class="text-xl font-semibold text-gray-800">Precipitation Analysis</h3>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm text-gray-500">X-Axis:</span>
+                            <select id="precipXAxis" onchange="updatePrecipChart()" class="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-lg px-2 py-1 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="temperature">Temperature</option>
+                                <option value="humidity">Humidity</option>
+                                <option value="time">Time of Day</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="h-96">
+                        <canvas id="precipScatterChart"></canvas>
+                    </div>
+                    
+                    <div class="mt-4 flex flex-wrap justify-center gap-4">
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                            <span class="text-sm text-gray-700">Precipitation Chance</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                            <span class="text-sm text-gray-700">Actual Precipitation</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center text-sm">
+                        <div class="text-gray-500">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Showing {{ forecast|length }} data points
+                        </div>
+                        <button onclick="exportPrecipData()" class="text-blue-600 hover:text-blue-800 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Export Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Additional Weather Data -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 fade-in">
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Sun & Moon</h3>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="flex items-center mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-yellow-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                                </svg>
+                                <span class="font-medium">Sunrise</span>
+                            </div>
+                            <div class="text-2xl">
+                                {% if city.sunrise %}
+                                    {{ city.sunrise.strftime('%H:%M') }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-lg">
+                            <div class="flex items-center mb-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-indigo-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
+                                </svg>
+                                <span class="font-medium">Sunset</span>
+                            </div>
+                            <div class="text-2xl">
+                                {% if city.sunset %}
+                                    {{ city.sunset.strftime('%H:%M') }}
+                                {% else %}
+                                    N/A
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Air Quality</h3>
+                    <div class="flex items-center">
+                        <div class="mr-4">
+                            <div class="text-4xl font-bold text-green-600">Good</div>
+                            <div class="text-gray-500">AQI 32</div>
+                        </div>
+                        <div class="flex-1">
+                            <div class="h-3 bg-gradient-to-r from-green-500 via-yellow-500 to-red-500 rounded-full mb-2"></div>
+                            <div class="flex justify-between text-xs text-gray-500">
+                                <span>0</span>
+                                <span>50</span>
+                                <span>100</span>
+                                <span>150</span>
+                                <span>200+</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Data Analysis Tab Content -->
+        <div id="analysis-tab" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Weather Data Analysis</h2>
+                
+                <!-- Summary Statistics -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="stat-card bg-blue-50 rounded-lg p-4 border border-blue-100">
+                        <div class="text-blue-500 mb-1">Avg Temperature</div>
+                        <div class="text-2xl font-bold text-gray-800">
+                            {{ (forecast|sum(attribute='temperature')/forecast|length)|round(1) }}°C
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <!-- Max Temperature Card -->
+                        <div class="stat-card bg-green-50 rounded-lg p-4 border border-green-100 hover:shadow-md transition-shadow duration-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-green-600 text-sm font-medium mb-1">Max Temperature</div>
+                                    <div class="text-2xl font-bold text-gray-800">
+                                        {% set max_temp = forecast|map(attribute='temperature')|max %}
+                                        {{ "%.1f"|format(max_temp) }}°C
+                                    </div>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                                </svg>
+                            </div>
+                            <div class="mt-2 text-xs text-green-500">
+                                {% for entry in forecast if entry.temperature == max_temp %}
+                                    {{ entry.timestamp.strftime('%a, %b %d') if entry.timestamp else '' }}
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Min Temperature Card -->
+                        <div class="stat-card bg-yellow-50 rounded-lg p-4 border border-yellow-100 hover:shadow-md transition-shadow duration-200">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <div class="text-yellow-600 text-sm font-medium mb-1">Min Temperature</div>
+                                    <div class="text-2xl font-bold text-gray-800">
+                                        {% set min_temp = forecast|map(attribute='temperature')|min %}
+                                        {{ "%.1f"|format(min_temp) }}°C
+                                    </div>
+                                </div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                                </svg>
+                            </div>
+                            <div class="mt-2 text-xs text-yellow-500">
+                                {% for entry in forecast if entry.temperature == min_temp %}
+                                    {{ entry.timestamp.strftime('%a, %b %d') if entry.timestamp else '' }}
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="stat-card bg-purple-50 rounded-lg p-4 border border-purple-100">
+                        <div class="text-purple-500 mb-1">Avg Humidity</div>
+                        <div class="text-2xl font-bold text-gray-800">
+                            {{ (forecast|sum(attribute='humidity')/forecast|length)|round(1) }}%
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Weather Patterns -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                    <div class="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-gray-800">Weather Conditions Distribution</h3>
+                            <div class="flex items-center text-sm">
+                                <span class="mr-2 text-gray-500">View:</span>
+                                <select id="conditionView" onchange="updateConditionsChart()" class="bg-gray-50 border border-gray-300 text-gray-700 rounded-lg px-3 py-1 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="pie">Pie Chart</option>
+                                    <option value="bar">Bar Chart</option>
+                                    <option value="doughnut">Doughnut Chart</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="h-80">
+                            <canvas id="weatherConditionsChart"></canvas>
+                        </div>
+                        
+                        <div class="mt-4 flex flex-wrap justify-center gap-4" id="conditionsLegend"></div>
+                        
+                        <div class="mt-6 pt-4 border-t border-gray-200 text-sm text-gray-500 flex justify-between items-center">
+                            <div>
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Showing {{ forecast|length }} data points
+                            </div>
+                            <button onclick="exportConditionsData()" class="text-blue-600 hover:text-blue-800 text-sm flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Export Data
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-gray-800">Wind Speed Analysis</h3>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm text-gray-500">View:</span>
+                                <select id="windChartType" onchange="updateWindChart()" class="bg-gray-50 border border-gray-300 text-gray-700 text-sm rounded-lg px-2 py-1 focus:ring-blue-500 focus:border-blue-500">
+                                    <option value="line">Line Graph</option>
+                                    <option value="bar">Bar Chart</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div class="h-80">
+                            <canvas id="windAnalysisChart"></canvas>
+                        </div>
+                        
+                        <div class="mt-4 flex flex-wrap justify-center gap-4">
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                                <span class="text-sm text-gray-700">Wind Speed (m/s)</span>
+                            </div>
+                            <div class="flex items-center">
+                                <div class="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
+                                <span class="text-sm text-gray-700">Gust Speed (m/s)</span>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center text-sm">
+                            <div class="text-gray-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 inline mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                </svg>
+                                Showing {{ forecast|length }} data points
+                            </div>
+                            <button onclick="exportWindData()" class="text-blue-600 hover:text-blue-800 flex items-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                </svg>
+                                Export Data
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Export Data Tab Content -->
+        <div id="export-tab" class="tab-content hidden">
+            <div class="bg-white rounded-xl shadow-lg p-6 mb-8 fade-in">
+                <h2 class="text-2xl font-bold text-gray-800 mb-6">Export Weather Data</h2>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div class="bg-blue-50 rounded-xl p-6 border border-blue-100">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Download CSV</h3>
+                        <p class="text-gray-600 mb-6">Export the complete weather forecast data in CSV format for analysis in Excel or other tools.</p>
+                        <button onclick="exportToCSV()" class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                            </svg>
+                            Download CSV
+                        </button>
+                    </div>
+                    
+                    <div class="bg-green-50 rounded-xl p-6 border border-green-100">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">JSON Data</h3>
+                        <p class="text-gray-600 mb-6">Copy the raw JSON data for use in your applications or APIs.</p>
+                        <button onclick="copyJSON()" class="bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                            </svg>
+                            Copy JSON
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="mt-8 bg-white rounded-xl shadow-lg p-6 border border-gray-200">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Weather Trends Over Time</h3>
+                    
+                    <!-- Time Period Selector -->
+                    <div class="flex space-x-2 mb-6">
+                        <button onclick="updateChart('24h')" class="time-period-btn active bg-blue-100 text-blue-700">24 Hours</button>
+                        <button onclick="updateChart('5d')" class="time-period-btn bg-gray-100 text-gray-700">5 Days</button>
+                        <button onclick="updateChart('all')" class="time-period-btn bg-gray-100 text-gray-700">All Data</button>
+                    </div>
+                    
+                    <!-- Multi-Line Chart -->
+                    <div class="h-96">
+                        <canvas id="weatherTrendsChart"></canvas>
+                    </div>
+                    
+                    <!-- Legend -->
+                    <div class="flex flex-wrap justify-center mt-4 gap-4">
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-blue-500 rounded-full mr-2"></div>
+                            <span class="text-sm">Temperature (°C)</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-red-500 rounded-full mr-2"></div>
+                            <span class="text-sm">Feels Like (°C)</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-green-500 rounded-full mr-2"></div>
+                            <span class="text-sm">Humidity (%)</span>
+                        </div>
+                        <div class="flex items-center">
+                            <div class="w-4 h-4 bg-purple-500 rounded-full mr-2"></div>
+                            <span class="text-sm">Wind (m/s)</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Data Export -->
+                    <div class="mt-6 pt-6 border-t border-gray-200 flex justify-end">
+                        <button onclick="exportChartData()" class="flex items-center text-blue-600 hover:text-blue-800">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                            Export Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-6">
+        <div class="container mx-auto px-4 text-center">
+            <p class="mb-1">© 2023 SkyCast Pro Weather Dashboard</p>
+            <p class="text-gray-400 text-sm">Weather data provided by OpenWeatherMap</p>
+        </div>
+    </footer>
+
+    {% if city and forecast %}
+    <script>
+        // Tab Navigation
+        function showTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.add('hidden');
+            });
+            
+            // Show selected tab content
+            document.getElementById(tabName + '-tab').classList.remove('hidden');
+            
+            // Update active tab styling
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+                tab.classList.add('text-white/80');
+            });
+            
+            event.currentTarget.classList.add('active');
+            event.currentTarget.classList.remove('text-white/80');
+        }
+        
+        // Export to CSV
+        function exportToCSV() {
+            const forecastData = {{ forecast|tojson|safe }};
+            const cityData = {{ city|tojson|safe }};
+            
+            // Prepare CSV data
+            const csvData = [
+                ['Date', 'Temperature (°C)', 'Feels Like (°C)', 'Conditions', 'Humidity (%)', 'Wind Speed (m/s)', 'Pressure (hPa)']
+            ];
+            
+            forecastData.forEach(entry => {
+                csvData.push([
+                    entry.timestamp ? new Date(entry.timestamp).toLocaleString() : 'N/A',
+                    entry.temperature,
+                    entry.feels_like,
+                    entry.description,
+                    entry.humidity,
+                    entry.wind,
+                    entry.pressure || 'N/A'
+                ]);
+            });
+            
+            // Convert to CSV string
+            const csv = Papa.unparse(csvData);
+            
+            // Create download link
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `weather_forecast_${cityData.name}_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+        
+        // Copy JSON to clipboard
+        function copyJSON() {
+            const jsonPreview = document.getElementById('json-preview');
+            const range = document.createRange();
+            range.selectNode(jsonPreview);
+            window.getSelection().removeAllRanges();
+            window.getSelection().addRange(range);
+            document.execCommand('copy');
+            window.getSelection().removeAllRanges();
+            
+            // Show copied notification
+            const button = event.currentTarget;
+            const originalText = button.innerHTML;
+            button.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>Copied!';
+            
+            setTimeout(() => {
+                button.innerHTML = originalText;
+            }, 2000);
+        }
+
+        // Sample data processing - replace with your actual forecast data processing
+        function processConditionsData() {
+            const conditions = {};
+            const forecastData = {{ forecast|tojson|safe }};
+            
+            forecastData.forEach(entry => {
+                const desc = entry.description.toLowerCase();
+                let condition;
+                
+                if (desc.includes('clear')) {
+                    condition = 'Clear';
+                } else if (desc.includes('cloud')) {
+                    condition = 'Cloudy';
+                } else if (desc.includes('rain') || desc.includes('drizzle')) {
+                    condition = 'Rain';
+                } else if (desc.includes('snow')) {
+                    condition = 'Snow';
+                } else if (desc.includes('thunderstorm')) {
+                    condition = 'Thunderstorm';
+                } else if (desc.includes('fog') || desc.includes('mist')) {
+                    condition = 'Fog/Mist';
+                } else {
+                    condition = 'Other';
+                }
+                
+                conditions[condition] = (conditions[condition] || 0) + 1;
+            });
+            
+            return {
+                labels: Object.keys(conditions),
+                counts: Object.values(conditions),
+                colors: {
+                    'Clear': '#f59e0b',    // Amber
+                    'Cloudy': '#94a3b8',   // Gray
+                    'Rain': '#3b82f6',     // Blue
+                    'Snow': '#e2e8f0',     // Light gray
+                    'Thunderstorm': '#7c3aed', // Violet
+                    'Fog/Mist': '#64748b', // Slate
+                    'Other': '#d1d5db'     // Light gray
+                }
+            };
+        }
+
+        let precipChart;
+        let conditionsChart;
+        let windChart;
+        let weatherChart;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            renderPrecipChart('temperature');
+            renderConditionsChart('pie');
+            renderWindChart('line');
+            renderChart(filterData('24h'));
+
+            // Temperature Chart
+            const tempCtx = document.getElementById('tempChart').getContext('2d');
+            new Chart(tempCtx, {
+                type: 'line',
+                data: {
+                    labels: [
+                        {% for entry in forecast %}
+                            "{{ entry.timestamp.strftime('%a') }}"
+                            {% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    ],
+                    datasets: [{
+                        label: 'Temperature (°C)',
+                        data: [
+                            {% for entry in forecast %}
+                                {{ entry.temperature }}
+                                {% if not loop.last %},{% endif %}
+                            {% endfor %}
+                        ],
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 3,
+                        tension: 0.4,
+                        fill: true,
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#3b82f6',
+                        pointBorderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: { size: 14, weight: 'bold' },
+                            bodyFont: { size: 12 },
+                            padding: 12,
+                            cornerRadius: 8,
+                            displayColors: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            grid: { color: 'rgba(0, 0, 0, 0.05)' },
+                            ticks: { callback: value => value + '°' }
+                        },
+                        x: { grid: { display: false } }
+                    }
+                }
+            });
+        });
+
+        function renderPrecipChart(xAxis) {
+            const ctx = document.getElementById('precipScatterChart').getContext('2d');
+            const forecastData = {{ forecast|tojson|safe }};
+            
+            if (precipChart) {
+                precipChart.destroy();
+            }
+            
+            // Prepare data based on selected x-axis
+            const xValues = forecastData.map(entry => {
+                if (xAxis === 'temperature') return entry.temperature;
+                if (xAxis === 'humidity') return entry.humidity;
+                if (xAxis === 'time') {
+                    if (!entry.timestamp) return 0;
+                    const date = new Date(entry.timestamp);
+                    return date.getHours() + (date.getMinutes()/60);
+                }
+                return 0;
+            });
+            
+            const xLabel = {
+                'temperature': 'Temperature (°C)',
+                'humidity': 'Humidity (%)',
+                'time': 'Time of Day'
+            }[xAxis];
+            
+            precipChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: 'Precipitation Chance',
+                            data: forecastData.map((entry, i) => ({
+                                x: xValues[i],
+                                y: (entry.precipitation || 0) * 100, // Convert to percentage
+                                time: entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A',
+                                temp: entry.temperature,
+                                humidity: entry.humidity
+                            })),
+                            backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                            borderColor: '#1e40af',
+                            borderWidth: 1,
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        },
+                        {
+                            label: 'Actual Precipitation',
+                            data: forecastData.filter(entry => entry.rain || entry.snow).map((entry, i) => ({
+                                x: xValues[forecastData.indexOf(entry)],
+                                y: (entry.rain?.['1h'] || entry.snow?.['1h'] || 0) * 10, // Scale for visibility
+                                time: entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A',
+                                type: entry.rain ? 'Rain' : 'Snow',
+                                amount: entry.rain?.['1h'] || entry.snow?.['1h'] || 0
+                            })),
+                            backgroundColor: 'rgba(16, 185, 129, 0.7)',
+                            borderColor: '#047857',
+                            borderWidth: 1,
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: xLabel
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'Precipitation Chance (%)'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
+                            beginAtZero: true,
+                            max: 100
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const point = context.raw;
+                                    let info = [];
+                                    
+                                    if (context.datasetIndex === 0) {
+                                        info.push(`${label}: ${point.y.toFixed(1)}%`);
+                                        info.push(`Temp: ${point.temp}°C`);
+                                        info.push(`Humidity: ${point.humidity}%`);
+                                    } else {
+                                        info.push(`${point.type}: ${point.amount}mm`);
+                                    }
+                                    
+                                    info.push(`Time: ${point.time}`);
+                                    return info;
+                                }
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function updatePrecipChart() {
+            const xAxis = document.getElementById('precipXAxis').value;
+            renderPrecipChart(xAxis);
+        }
+
+        function exportPrecipData() {
+            const forecastData = {{ forecast|tojson|safe }};
+            const xAxis = document.getElementById('precipXAxis').value;
+            const csvRows = [];
+            
+            // Header
+            csvRows.push(['Time', 'X-Value', 'Precipitation Chance (%)', 'Actual Precipitation (mm)', 'Temperature (°C)', 'Humidity (%)']);
+            
+            // Data
+            forecastData.forEach(entry => {
+                const xValue = xAxis === 'temperature' ? entry.temperature :
+                            xAxis === 'humidity' ? entry.humidity :
+                            entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A';
+                
+                const precip = entry.precipitation ? (entry.precipitation * 100).toFixed(1) : '0';
+                const actualPrecip = entry.rain?.['1h'] || entry.snow?.['1h'] || '0';
+                
+                csvRows.push([
+                    entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A',
+                    xValue,
+                    precip,
+                    actualPrecip,
+                    entry.temperature,
+                    entry.humidity
+                ]);
+            });
+            
+            const csvContent = csvRows.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `precipitation_analysis_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function renderConditionsChart(type) {
+            const ctx = document.getElementById('weatherConditionsChart').getContext('2d');
+            const data = processConditionsData();
+            
+            if (conditionsChart) {
+                conditionsChart.destroy();
+            }
+            
+            const chartConfig = {
+                data: {
+                    labels: data.labels,
+                    datasets: [{
+                        data: data.counts,
+                        backgroundColor: data.labels.map(label => data.colors[label]),
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                    const percentage = Math.round((value / total) * 100);
+                                    return `${label}: ${value} (${percentage}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+            
+            switch(type) {
+                case 'pie':
+                    conditionsChart = new Chart(ctx, {
+                        ...chartConfig,
+                        type: 'pie',
+                        options: {
+                            ...chartConfig.options,
+                            cutout: '0%'
+                        }
+                    });
+                    break;
+                    
+                case 'doughnut':
+                    conditionsChart = new Chart(ctx, {
+                        ...chartConfig,
+                        type: 'doughnut',
+                        options: {
+                            ...chartConfig.options,
+                            cutout: '60%'
+                        }
+                    });
+                    break;
+                    
+                case 'bar':
+                    conditionsChart = new Chart(ctx, {
+                        ...chartConfig,
+                        type: 'bar',
+                        options: {
+                            ...chartConfig.options,
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: 'rgba(0, 0, 0, 0.05)'
+                                    },
+                                    ticks: {
+                                        precision: 0
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        display: false
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    break;
+            }
+            
+            updateLegend(data);
+        }
+
+        function updateConditionsChart() {
+            const viewType = document.getElementById('conditionView').value;
+            renderConditionsChart(viewType);
+        }
+
+        function updateLegend(data) {
+            const legendContainer = document.getElementById('conditionsLegend');
+            legendContainer.innerHTML = '';
+            
+            data.labels.forEach((label, index) => {
+                const legendItem = document.createElement('div');
+                legendItem.className = 'flex items-center';
+                legendItem.innerHTML = `
+                    <div class="w-3 h-3 rounded-full mr-2" style="background-color: ${data.colors[label]}"></div>
+                    <span class="text-sm text-gray-700">${label} (${data.counts[index]})</span>
+                `;
+                legendContainer.appendChild(legendItem);
+            });
+        }
+
+        function exportConditionsData() {
+            const data = processConditionsData();
+            const csvRows = [];
+            
+            // Header
+            csvRows.push(['Condition', 'Count', 'Percentage']);
+            
+            // Data
+            const total = data.counts.reduce((a, b) => a + b, 0);
+            data.labels.forEach((label, index) => {
+                const count = data.counts[index];
+                const percentage = Math.round((count / total) * 100);
+                csvRows.push([label, count, `${percentage}%`]);
+            });
+            
+            const csvContent = csvRows.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `weather_conditions_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        function renderWindChart(type) {
+            const ctx = document.getElementById('windAnalysisChart').getContext('2d');
+            const forecastData = {{ forecast|tojson|safe }};
+            
+            if (windChart) {
+                windChart.destroy();
+            }
+            
+            const chartData = {
+                labels: forecastData.map(entry => 
+                    entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A'
+                ),
+                datasets: [
+                    {
+                        label: 'Wind Speed (m/s)',
+                        data: forecastData.map(entry => entry.wind),
+                        borderColor: '#3b82f6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true,
+                        yAxisID: 'y'
+                    },
+                    {
+                        label: 'Gust Speed (m/s)',
+                        data: forecastData.map(entry => entry.wind_gust || entry.wind * 1.3), // Fallback if gust data not available
+                        borderColor: '#ef4444',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: false,
+                        yAxisID: 'y'
+                    }
+                ]
+            };
+            
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.dataset.label}: ${context.parsed.y.toFixed(1)} m/s`;
+                            }
+                        }
+                    },
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Speed (m/s)'
+                        },
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    }
+                }
+            };
+            
+            if (type === 'bar') {
+                windChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        ...chartData,
+                        datasets: chartData.datasets.map(dataset => ({
+                            ...dataset,
+                            borderWidth: 0,
+                            borderRadius: 2,
+                            backgroundColor: dataset.label.includes('Wind') ? 
+                                'rgba(59, 130, 246, 0.7)' : 
+                                'rgba(239, 68, 68, 0.7)'
+                        }))
+                    },
+                    options: {
+                        ...commonOptions,
+                        scales: {
+                            ...commonOptions.scales,
+                            x: {
+                                stacked: false,
+                                grid: {
+                                    display: false
+                                }
+                            },
+                            y: {
+                                stacked: false
+                            }
+                        }
+                    }
+                });
+            } else {
+                windChart = new Chart(ctx, {
+                    type: 'line',
+                    data: chartData,
+                    options: commonOptions
+                });
+            }
+        }
+
+        function updateWindChart() {
+            const chartType = document.getElementById('windChartType').value;
+            renderWindChart(chartType);
+        }
+
+        function exportWindData() {
+            const forecastData = {{ forecast|tojson|safe }};
+            const csvRows = [];
+            
+            // Header
+            csvRows.push(['Time', 'Wind Speed (m/s)', 'Gust Speed (m/s)']);
+            
+            // Data
+            forecastData.forEach(entry => {
+                const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'N/A';
+                const gust = entry.wind_gust || entry.wind * 1.3;
+                csvRows.push([time, entry.wind, gust]);
+            });
+            
+            const csvContent = csvRows.map(row => row.join(',')).join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `wind_analysis_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Sample data - replace with your actual forecast data
+        const forecastData = [
+            {timestamp: '2025-08-10T09:00', temperature: 22.3, feels_like: 23.1, humidity: 68, wind: 2.1},
+            {timestamp: '2025-08-10T12:00', temperature: 24.8, feels_like: 25.5, humidity: 62, wind: 2.5},
+            {timestamp: '2025-08-10T15:00', temperature: 26.5, feels_like: 26.5, humidity: 75, wind: 2.7},
+            {timestamp: '2025-08-10T18:00', temperature: 25.1, feels_like: 25.8, humidity: 72, wind: 2.3},
+            {timestamp: '2025-08-11T09:00', temperature: 23.7, feels_like: 24.3, humidity: 70, wind: 1.9},
+            {timestamp: '2025-08-11T12:00', temperature: 25.2, feels_like: 25.9, humidity: 65, wind: 2.2},
+            {timestamp: '2025-08-11T15:00', temperature: 27.1, feels_like: 27.8, humidity: 60, wind: 2.8},
+            {timestamp: '2025-08-11T18:00', temperature: 24.9, feels_like: 25.6, humidity: 68, wind: 2.4},
+            {timestamp: '2025-08-12T09:00', temperature: 23.5, feels_like: 24.1, humidity: 72, wind: 1.8},
+            {timestamp: '2025-08-12T12:00', temperature: 25.7, feels_like: 26.3, humidity: 67, wind: 2.3},
+            {timestamp: '2025-08-12T15:00', temperature: 26.5, feels_like: 26.5, humidity: 75, wind: 2.7},
+            {timestamp: '2025-08-12T18:00', temperature: 24.8, feels_like: 25.5, humidity: 73, wind: 2.1}
+        ];
+
+        function filterData(range) {
+            const now = new Date();
+            let cutoffDate = new Date(now);
+            
+            switch(range) {
+                case '24h':
+                    cutoffDate.setHours(now.getHours() - 24);
+                    break;
+                case '5d':
+                    cutoffDate.setDate(now.getDate() - 5);
+                    break;
+                case 'all':
+                    return forecastData; // Return all data
+            }
+            
+            return forecastData.filter(entry => {
+                const entryDate = new Date(entry.timestamp);
+                return entryDate >= cutoffDate;
+            });
+        }
+
+        function renderChart(data) {
+            const ctx = document.getElementById('weatherTrendsChart').getContext('2d');
+            
+            if (weatherChart) {
+                weatherChart.destroy();
+            }
+            
+            weatherChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: data.map(entry => new Date(entry.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})),
+                    datasets: [
+                        {
+                            label: 'Temperature (°C)',
+                            data: data.map(entry => entry.temperature),
+                            borderColor: '#3b82f6',
+                            backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Feels Like (°C)',
+                            data: data.map(entry => entry.feels_like),
+                            borderColor: '#ef4444',
+                            backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'Humidity (%)',
+                            data: data.map(entry => entry.humidity),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            yAxisID: 'y1'
+                        },
+                        {
+                            label: 'Wind (m/s)',
+                            data: data.map(entry => entry.wind),
+                            borderColor: '#8b5cf6',
+                            backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: false,
+                            yAxisID: 'y2'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'Temperature (°C)'
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Humidity (%)'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            min: 0,
+                            max: 100
+                        },
+                        y2: {
+                            type: 'linear',
+                            display: false,
+                            position: 'right',
+                            min: 0
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            backgroundColor: '#1e293b',
+                            titleFont: {
+                                size: 14,
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                size: 12
+                            },
+                            padding: 12,
+                            cornerRadius: 8,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    if (context.parsed.y !== null) {
+                                        label += context.parsed.y;
+                                    }
+                                    return label;
+                                }
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateChart(range) {
+            // Update active button
+            document.querySelectorAll('.time-period-btn').forEach(btn => {
+                btn.classList.remove('active', 'bg-blue-100', 'text-blue-700');
+                btn.classList.add('bg-gray-100', 'text-gray-700');
+            });
+            event.target.classList.add('active', 'bg-blue-100', 'text-blue-700');
+            event.target.classList.remove('bg-gray-100', 'text-gray-700');
+            
+            // Update chart
+            renderChart(filterData(range));
+        }
+
+        function exportChartData() {
+            const dataToExport = weatherChart.data.datasets.map(dataset => {
+                return {
+                    metric: dataset.label,
+                    values: dataset.data
+                };
+            });
+            
+            const timestamps = weatherChart.data.labels;
+            const csvRows = [];
+            
+            // Header
+            csvRows.push(['Time', ...weatherChart.data.datasets.map(d => d.label)].join(','));
+            
+            // Data
+            timestamps.forEach((time, i) => {
+                const row = [time];
+                weatherChart.data.datasets.forEach(dataset => {
+                    row.push(dataset.data[i]);
+                });
+                csvRows.push(row.join(','));
+            });
+            
+            const csvContent = csvRows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `weather_trends_${new Date().toISOString().slice(0,10)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>aaa
+    <style>
+        .time-period-btn {
+            @apply px-4 py-2 rounded-lg text-sm font-medium transition-colors;
+        }
+        .time-period-btn.active {
+            @apply bg-blue-100 text-blue-700;
+        }
+    </style>
+    {% endif %}
+</body>
+</html>
